@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppProvider, useAppContext } from './context/AppContext';
@@ -12,9 +7,18 @@ import Chat from './components/Chat';
 import ProfileView from './components/ProfileView';
 import BottomNav from './components/BottomNav';
 import Onboarding from './components/Onboarding';
+import Auth from './components/Auth';
 
 function AppContent() {
-  const { isOnboarded, setIsOnboarded, activeTab, setActiveTab } = useAppContext();
+  const { user, isLoading, isOnboarded, setIsOnboarded, activeTab, setActiveTab } = useAppContext();
+
+  if (isLoading) {
+    return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
 
   if (!isOnboarded) {
     return <Onboarding onComplete={() => setIsOnboarded(true)} />;

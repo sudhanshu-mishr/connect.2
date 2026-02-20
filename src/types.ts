@@ -1,13 +1,26 @@
 export interface Profile {
-  id: string;
+  id: string | number;
   name: string;
   age: number;
   bio: string;
-  distance: string;
+  distance?: string;
   job?: string;
   school?: string;
   images: string[];
   interests: string[];
+}
+
+export interface User {
+  id: number;
+  email: string;
+  is_active: boolean;
+  is_onboarded: boolean;
+  profile?: Profile;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
 }
 
 export interface Match {
