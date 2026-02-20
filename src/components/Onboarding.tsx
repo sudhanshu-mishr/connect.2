@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Flame, Check, Search, Music, Heart } from 'lucide-react';
+import { Flame, Check, Search, Music, Heart, User as UserIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAppContext } from '../context/AppContext';
 
 interface OnboardingProps {
-  onComplete: () => void;
+  onComplete?: () => void;
 }
 
 const STEPS = [
@@ -13,6 +14,12 @@ const STEPS = [
     title: 'Welcome to Conect',
     description: 'Connect with people around you and find your perfect match.',
     icon: Flame,
+  },
+  {
+    id: 'basic',
+    title: 'Basic Info',
+    description: 'Tell us a bit about yourself.',
+    icon: UserIcon,
   },
   {
     id: 'photos',
@@ -37,23 +44,41 @@ const STEPS = [
 const INTERESTS = ['Coffee', 'Hiking', 'Art', 'Travel', 'Cooking', 'Gaming', 'Music', 'Wine', 'Yoga', 'Nature', 'Fitness', 'Coding'];
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
+  const { completeOnboarding } = useAppContext();
   const [currentStep, setCurrentStep] = useState(0);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const nextStep = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    age: 18,
+    bio: '',
+    interests: [] as string[],
+    images: [] as string[] // Placeholder for now
+  });
+
+  const nextStep = async () => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      onComplete();
+      setLoading(true);
+      try {
+        await completeOnboarding(formData);
+        if (onComplete) onComplete();
+      } catch (error) {
+        console.error('Onboarding failed:', error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const toggleInterest = (interest: string) => {
-    setSelectedInterests(prev => 
-      prev.includes(interest) 
-        ? prev.filter(i => i !== interest) 
-        : [...prev, interest]
-    );
+    setFormData(prev => ({
+      ...prev,
+      interests: prev.interests.includes(interest)
+        ? prev.interests.filter(i => i !== interest)
+        : [...prev.interests, interest]
+    }));
   };
 
   const step = STEPS[currentStep];
@@ -61,12 +86,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   return (
     <div className="h-screen bg-black flex flex-col items-center justify-between p-8 text-center relative">
-      <button 
-        onClick={onComplete}
-        className="absolute top-8 right-8 text-white/40 text-sm font-bold uppercase tracking-widest hover:text-white transition-colors"
-      >
-        Skip
-      </button>
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md">
         <AnimatePresence mode="wait">
           <motion.div
@@ -75,7 +94,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -50 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className="flex flex-col items-center"
+            className="flex flex-col items-center w-full"
           >
             <div className="w-24 h-24 rounded-3xl tinder-gradient flex items-center justify-center mb-8 shadow-2xl shadow-tinder-orange/20">
               <Icon size={48} color="white" />
@@ -86,6 +105,25 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               {step.description}
             </p>
 
+            {step.id === 'basic' && (
+               <div className="w-full space-y-4">
+                 <input
+                   type="text"
+                   placeholder="Your Name"
+                   value={formData.name}
+                   onChange={e => setFormData({...formData, name: e.target.value})}
+                   className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/40 focus:outline-none focus:border-tinder-orange transition-colors"
+                 />
+                 <input
+                   type="number"
+                   placeholder="Age"
+                   value={formData.age}
+                   onChange={e => setFormData({...formData, age: parseInt(e.target.value)})}
+                   className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/40 focus:outline-none focus:border-tinder-orange transition-colors"
+                 />
+               </div>
+            )}
+
             {step.id === 'interests' && (
               <div className="grid grid-cols-3 gap-3 w-full mt-4">
                 {INTERESTS.map(interest => (
@@ -94,7 +132,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     onClick={() => toggleInterest(interest)}
                     className={cn(
                       "px-4 py-2 rounded-full border text-sm transition-all duration-300",
-                      selectedInterests.includes(interest)
+                      formData.interests.includes(interest)
                         ? "bg-white text-black border-white"
                         : "border-white/20 text-white/60 hover:border-white/40"
                     )}
@@ -109,12 +147,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               <div className="w-full mt-4">
                 <textarea
                   placeholder="I love long walks on the beach..."
+                  value={formData.bio}
+                  onChange={e => setFormData({...formData, bio: e.target.value})}
                   className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder:text-white/20 focus:outline-none focus:border-tinder-orange transition-colors"
                 />
-                <div className="flex items-center gap-2 mt-6 p-4 bg-white/5 rounded-2xl border border-white/10">
-                  <Music size={20} className="text-green-500" />
-                  <span className="text-sm text-white/60">Connect Spotify Anthem</span>
-                </div>
               </div>
             )}
           </motion.div>
@@ -137,9 +173,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
         <button
           onClick={nextStep}
-          className="w-full py-5 rounded-full tinder-gradient text-white font-bold text-lg uppercase tracking-widest shadow-xl shadow-tinder-orange/30 active:scale-95 transition-transform"
+          disabled={loading}
+          className="w-full py-5 rounded-full tinder-gradient text-white font-bold text-lg uppercase tracking-widest shadow-xl shadow-tinder-orange/30 active:scale-95 transition-transform disabled:opacity-50"
         >
-          {currentStep === STEPS.length - 1 ? 'Get Started' : 'Continue'}
+          {loading ? 'Setting up...' : (currentStep === STEPS.length - 1 ? 'Get Started' : 'Continue')}
         </button>
       </div>
     </div>

@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Profile, Match, Message, AppTab } from '../types';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { Profile, Match, Message, AppTab, User } from '../types';
 import { MOCK_PROFILES, MOCK_MATCHES } from '../constants';
+import { api } from '../api';
 
 interface AppContextType {
+  user: User | null;
+  isLoading: boolean;
   isOnboarded: boolean;
   setIsOnboarded: (val: boolean) => void;
   activeTab: AppTab;
@@ -16,12 +19,17 @@ interface AppContextType {
   setActiveMatch: (id: string | null) => void;
   messages: Record<string, Message[]>;
   sendMessage: (matchId: string, text: string) => void;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  completeOnboarding: (profileData: Partial<Profile>) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>('discovery');
   const [profiles] = useState<Profile[]>(MOCK_PROFILES);
@@ -38,6 +46,44 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       { id: '1', senderId: 'me', text: 'That sounds like a plan!', timestamp: '1h ago' },
     ]
   });
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const userData = await api.getMe();
+          setUser(userData);
+          setIsOnboarded(userData.is_onboarded);
+        } catch (error) {
+          console.error('Failed to fetch user:', error);
+          localStorage.removeItem('token');
+        }
+      }
+      setIsLoading(false);
+    };
+    initAuth();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const { access_token } = await api.login(email, password);
+    localStorage.setItem('token', access_token);
+    const userData = await api.getMe();
+    setUser(userData);
+    setIsOnboarded(userData.is_onboarded);
+  };
+
+  const signup = async (email: string, password: string) => {
+    await api.signup(email, password);
+    await login(email, password);
+  };
+
+  const completeOnboarding = async (profileData: Partial<Profile>) => {
+    await api.onboard(profileData);
+    const userData = await api.getMe();
+    setUser(userData);
+    setIsOnboarded(true);
+  };
 
   const handleSwipe = (direction: 'left' | 'right' | 'up') => {
     if (currentIndex >= profiles.length) return;
@@ -92,6 +138,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
     setIsOnboarded(false);
     setActiveTab('discovery');
     setCurrentIndex(0);
@@ -100,12 +148,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AppContext.Provider value={{
+      user, isLoading,
       isOnboarded, setIsOnboarded,
       activeTab, setActiveTab,
       profiles, currentIndex, handleSwipe, undo,
       matches, activeMatchId, setActiveMatch,
       messages, sendMessage,
-      logout
+      login, signup, logout, completeOnboarding
     }}>
       {children}
     </AppContext.Provider>
