@@ -1,0 +1,9 @@
+{
+  "name": "Conect",
+  "description": "A pixel-perfect social connection app with modern dark theme, gesture-based interactions, and smooth animations.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
