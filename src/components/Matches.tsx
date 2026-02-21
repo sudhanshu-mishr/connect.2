@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Search } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
@@ -7,12 +7,13 @@ import { cn } from '../lib/utils';
 export default function Matches() {
   const { matches, setActiveMatch, refreshMatches } = useAppContext();
 
-  // Optionally refresh matches on mount
-  React.useEffect(() => {
+  useEffect(() => {
     refreshMatches();
   }, [refreshMatches]);
 
+  // "New Matches" are those with no messages yet
   const newMatches = matches.filter(m => !m.lastMessage);
+  // "Messages" are those with at least one message
   const messages = matches.filter(m => m.lastMessage);
 
   return (
@@ -44,18 +45,18 @@ export default function Matches() {
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: i * 0.1 }}
-                  onClick={() => setActiveMatch(match.id)}
+                  onClick={() => setActiveMatch(String(match.id))}
                   className="flex flex-col items-center gap-2 min-w-[80px]"
                 >
                   <div className="w-16 h-16 rounded-full p-0.5 tinder-gradient">
                     <img
-                      src={match.profile.images[0] || "https://picsum.photos/200/200"}
-                      alt={match.profile.name}
+                      src={match.user.profile?.images?.[0] || "https://picsum.photos/200/200"}
+                      alt={match.user.profile?.name}
                       className="w-full h-full rounded-full object-cover border-2 border-black"
                       referrerPolicy="no-referrer"
                     />
                   </div>
-                  <span className="text-sm font-bold truncate w-full text-center">{match.profile.name}</span>
+                  <span className="text-sm font-bold truncate w-full text-center">{match.user.profile?.name || 'User'}</span>
                 </motion.button>
               ))}
             </div>
@@ -72,32 +73,34 @@ export default function Matches() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
-                onClick={() => setActiveMatch(match.id)}
+                onClick={() => setActiveMatch(String(match.id))}
                 className="flex items-center gap-4 p-3 -mx-3 rounded-2xl hover:bg-zinc-900 transition-colors active:scale-[0.99]"
               >
                 <div className="relative">
                   <img
-                    src={match.profile.images[0] || "https://picsum.photos/200/200"}
-                    alt={match.profile.name}
+                    src={match.user.profile?.images?.[0] || "https://picsum.photos/200/200"}
+                    alt={match.user.profile?.name}
                     className="w-16 h-16 rounded-full object-cover"
                     referrerPolicy="no-referrer"
                   />
-                  {match.unread && (
+                  {match.unread_count > 0 && (
                     <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-tinder-orange rounded-full border-2 border-black" />
                   )}
                 </div>
 
                 <div className="flex-1 text-left overflow-hidden">
                   <div className="flex items-center justify-between mb-1">
-                    <h4 className="font-bold text-lg">{match.profile.name}</h4>
-                    {/* Timestamp parsing/formatting logic needed for real data */}
-                    <span className="text-xs text-white/40">Recently</span>
+                    <h4 className="font-bold text-lg">{match.user.profile?.name}</h4>
+                    <span className="text-xs text-white/40">
+                      {/* Very basic timestamp format */}
+                      {new Date(match.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
                   </div>
                   <p className={cn(
                     "text-sm truncate",
-                    match.unread ? "text-white font-semibold" : "text-white/50"
+                    match.unread_count > 0 ? "text-white font-semibold" : "text-white/50"
                   )}>
-                    {match.lastMessage}
+                    {match.lastMessage?.text || 'Sent a photo'}
                   </p>
                 </div>
               </motion.button>
