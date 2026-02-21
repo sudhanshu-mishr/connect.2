@@ -1,7 +1,12 @@
 from sqlalchemy.orm import Session
-from . import models, schemas
-# auth is imported inside functions to avoid circular dependency
+from sqlalchemy import or_, and_
+from typing import List, Optional
+from datetime import datetime
 
+from . import models, schemas
+# auth imported below to avoid circular
+
+# User CRUD
 def get_user(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
 
@@ -17,15 +22,16 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.refresh(db_user)
     return db_user
 
+# Profile CRUD
+def get_user_profile(db: Session, user_id: int):
+    return db.query(models.Profile).filter(models.Profile.user_id == user_id).first()
+
 def create_user_profile(db: Session, profile: schemas.ProfileCreate, user_id: int):
     db_profile = models.Profile(**profile.dict(), user_id=user_id)
     db.add(db_profile)
     db.commit()
     db.refresh(db_profile)
     return db_profile
-
-def get_user_profile(db: Session, user_id: int):
-    return db.query(models.Profile).filter(models.Profile.user_id == user_id).first()
 
 def update_user_profile(db: Session, profile: schemas.ProfileUpdate, user_id: int):
     db_profile = db.query(models.Profile).filter(models.Profile.user_id == user_id).first()
@@ -49,3 +55,108 @@ def set_user_onboarded(db: Session, user_id: int):
         db.commit()
         db.refresh(db_user)
     return db_user
+
+# Discovery CRUD
+def get_potential_matches(db: Session, user_id: int, limit: int = 10):
+    swiped_rows = db.query(models.Swipe.target_id).filter(models.Swipe.user_id == user_id).all()
+    swiped_ids = [row[0] for row in swiped_rows]
+    exclude_ids = swiped_ids + [user_id]
+
+    potential_users = db.query(models.User).filter(models.User.id.notin_(exclude_ids)).limit(limit).all()
+
+    profiles = []
+    for user in potential_users:
+        if user.profile:
+            profiles.append(user.profile)
+    return profiles
+
+# Swipe CRUD
+def create_swipe(db: Session, swipe: schemas.SwipeCreate, user_id: int):
+    existing = db.query(models.Swipe).filter(
+        models.Swipe.user_id == user_id,
+        models.Swipe.target_id == swipe.target_id
+    ).first()
+
+    if existing:
+        return {"is_match": False}
+
+    db_swipe = models.Swipe(user_id=user_id, target_id=swipe.target_id, is_like=swipe.is_like)
+    db.add(db_swipe)
+    db.commit()
+
+    is_match = False
+    if swipe.is_like:
+        other_swipe = db.query(models.Swipe).filter(
+            models.Swipe.user_id == swipe.target_id,
+            models.Swipe.target_id == user_id,
+            models.Swipe.is_like == True
+        ).first()
+
+        if other_swipe:
+            match_exists = db.query(models.Match).filter(
+                or_(
+                    and_(models.Match.user1_id == user_id, models.Match.user2_id == swipe.target_id),
+                    and_(models.Match.user1_id == swipe.target_id, models.Match.user2_id == user_id)
+                )
+            ).first()
+
+            if not match_exists:
+                is_match = True
+                match = models.Match(user1_id=min(user_id, swipe.target_id), user2_id=max(user_id, swipe.target_id), timestamp=datetime.utcnow())
+                db.add(match)
+                db.commit()
+
+    return {"is_match": is_match}
+
+# Match CRUD
+def get_matches_for_user(db: Session, user_id: int):
+    matches = db.query(models.Match).filter(
+        or_(models.Match.user1_id == user_id, models.Match.user2_id == user_id)
+    ).order_by(models.Match.timestamp.desc()).all()
+
+    result = []
+    for match in matches:
+        other_user_id = match.user2_id if match.user1_id == user_id else match.user1_id
+        other_user = get_user(db, other_user_id)
+        if other_user:
+            last_message = db.query(models.Message).filter(models.Message.match_id == match.id).order_by(models.Message.timestamp.desc()).first()
+            unread_count = db.query(models.Message).filter(
+                models.Message.match_id == match.id,
+                models.Message.sender_id != user_id,
+                models.Message.is_read == False
+            ).count()
+
+            result.append({
+                "id": match.id,
+                "user": other_user,
+                "last_message": last_message,
+                "unread_count": unread_count,
+                "timestamp": match.timestamp or datetime.utcnow()
+            })
+
+    return result
+
+def get_messages(db: Session, match_id: int, limit: int = 50):
+    return db.query(models.Message).filter(models.Message.match_id == match_id).order_by(models.Message.timestamp.asc()).limit(limit).all()
+
+def create_message(db: Session, message: schemas.MessageCreate, user_id: int, match_id: int):
+    match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if not match:
+        return None
+    if match.user1_id != user_id and match.user2_id != user_id:
+        return None
+
+    db_message = models.Message(
+        match_id=match_id,
+        sender_id=user_id,
+        text=message.text
+    )
+    db.add(db_message)
+
+    match.timestamp = db_message.timestamp
+    db.add(match)
+
+    db.commit()
+    db.refresh(db_message)
+
+    return db_message

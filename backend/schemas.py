@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Any
+from datetime import datetime
 
 class Token(BaseModel):
     access_token: str
@@ -26,7 +27,7 @@ class ProfileResponse(ProfileBase):
     user_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -44,4 +45,38 @@ class UserResponse(UserBase):
     profile: Optional[ProfileResponse] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+# --- New Schemas ---
+
+class SwipeCreate(BaseModel):
+    target_id: int
+    is_like: bool
+
+class SwipeResponse(BaseModel):
+    is_match: bool
+
+class MessageBase(BaseModel):
+    text: str
+
+class MessageCreate(MessageBase):
+    pass
+
+class MessageResponse(MessageBase):
+    id: int
+    sender_id: int
+    timestamp: datetime
+    is_read: bool
+
+    class Config:
+        from_attributes = True
+
+class MatchResponse(BaseModel):
+    id: int
+    user: UserResponse  # The other user in the match
+    last_message: Optional[MessageResponse] = None
+    unread_count: int = 0
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True

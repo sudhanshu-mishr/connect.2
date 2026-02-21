@@ -1,7 +1,7 @@
 import os
 import logging
-from datetime import timedelta
-from typing import List
+from datetime import timedelta, datetime
+from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +15,7 @@ from . import crud, models, schemas, auth, database
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create tables if not exist (e.g., local SQLite file creation)
+# Create tables if not exist
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
@@ -79,26 +79,75 @@ def onboard_user(
     crud.set_user_onboarded(db, current_user.id)
     return db_profile
 
+@app.put("/api/users/me/profile", response_model=schemas.ProfileResponse)
+def update_profile(
+    profile: schemas.ProfileUpdate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    return crud.update_user_profile(db, profile, current_user.id)
+
+@app.get("/api/users/discovery", response_model=List[schemas.ProfileResponse])
+def get_discovery_profiles(
+    limit: int = 10,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    return crud.get_potential_matches(db, current_user.id, limit)
+
+@app.post("/api/swipes", response_model=schemas.SwipeResponse)
+def create_swipe(
+    swipe: schemas.SwipeCreate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    return crud.create_swipe(db, swipe, current_user.id)
+
+@app.get("/api/matches", response_model=List[schemas.MatchResponse])
+def get_matches(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    matches = crud.get_matches_for_user(db, current_user.id)
+    # The CRUD returns a list of dicts that matches the MatchResponse schema
+    return matches
+
+@app.get("/api/matches/{match_id}/messages", response_model=List[schemas.MessageResponse])
+def get_messages(
+    match_id: int,
+    limit: int = 50,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    # Security check: verify user is in match (handled in CRUD properly or here)
+    match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if not match or (match.user1_id != current_user.id and match.user2_id != current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return crud.get_messages(db, match_id, limit)
+
+@app.post("/api/matches/{match_id}/messages", response_model=schemas.MessageResponse)
+def create_message(
+    match_id: int,
+    message: schemas.MessageCreate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    db_message = crud.create_message(db, message, current_user.id, match_id)
+    if not db_message:
+        raise HTTPException(status_code=400, detail="Failed to send message")
+    return db_message
+
 # --- Static Files / Frontend ---
-# Serve React App from 'dist' folder if it exists.
-
-# Check current working directory and list contents for debugging on Render logs
 cwd = os.getcwd()
-logger.info(f"Current working directory: {cwd}")
-if os.path.exists(cwd):
-    logger.info(f"Directory contents: {os.listdir(cwd)}")
-
 dist_path = os.path.join(cwd, "dist")
 if os.path.exists(dist_path):
-    logger.info(f"Found dist folder at {dist_path}")
     app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
 
-    # Serve Root
     @app.get("/")
     async def serve_root():
         return FileResponse(os.path.join(dist_path, "index.html"))
 
-    # Catch-all route for SPA
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
         if full_path.startswith("api"):
@@ -110,7 +159,6 @@ if os.path.exists(dist_path):
 
         return FileResponse(os.path.join(dist_path, "index.html"))
 else:
-    logger.warning(f"Dist folder not found at {dist_path}. Serving fallback message.")
     @app.get("/")
     def read_root():
-        return {"message": "Welcome to Conect API (Development Mode - Frontend not built). Please run 'npm run build' locally or ensure build command succeeds on deployment."}
+        return {"message": "Welcome to Conect API (Development Mode - Frontend not built). Please run 'npm run build' locally."}

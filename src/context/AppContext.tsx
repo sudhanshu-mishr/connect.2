@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { Profile, Match, Message, AppTab, User } from '../types';
-import { MOCK_PROFILES, MOCK_MATCHES } from '../constants';
 import { api } from '../api';
 
 interface AppContextType {
@@ -18,11 +17,13 @@ interface AppContextType {
   activeMatchId: string | null;
   setActiveMatch: (id: string | null) => void;
   messages: Record<string, Message[]>;
-  sendMessage: (matchId: string, text: string) => void;
+  sendMessage: (matchId: string, text: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
   logout: () => void;
   completeOnboarding: (profileData: Partial<Profile>) => Promise<void>;
+  updateProfile: (profileData: Partial<Profile>) => Promise<void>;
+  refreshMatches: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -32,20 +33,33 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>('discovery');
-  const [profiles] = useState<Profile[]>(MOCK_PROFILES);
+
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState<number[]>([]);
-  const [matches, setMatches] = useState<Match[]>(MOCK_MATCHES);
+
+  const [matches, setMatches] = useState<Match[]>([]);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Record<string, Message[]>>({
-    'm1': [
-      { id: '1', senderId: 'me', text: 'Hey Sarah! How was your weekend?', timestamp: '10:30 AM' },
-      { id: '2', senderId: 'sarah', text: 'It was great! I went hiking. How about you?', timestamp: '10:32 AM' },
-    ],
-    'm2': [
-      { id: '1', senderId: 'me', text: 'That sounds like a plan!', timestamp: '1h ago' },
-    ]
-  });
+  const [messages, setMessages] = useState<Record<string, Message[]>>({});
+
+  const fetchDiscovery = useCallback(async () => {
+    try {
+      const data = await api.getDiscovery();
+      setProfiles(data);
+      setCurrentIndex(0);
+    } catch (error) {
+      console.error('Fetch discovery failed', error);
+    }
+  }, []);
+
+  const fetchMatches = useCallback(async () => {
+    try {
+      const data = await api.getMatches();
+      setMatches(data);
+    } catch (error) {
+      console.error('Fetch matches failed', error);
+    }
+  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -55,6 +69,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           const userData = await api.getMe();
           setUser(userData);
           setIsOnboarded(userData.is_onboarded);
+          if (userData.is_onboarded) {
+            fetchDiscovery();
+            fetchMatches();
+          }
         } catch (error) {
           console.error('Failed to fetch user:', error);
           localStorage.removeItem('token');
@@ -63,7 +81,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     };
     initAuth();
-  }, []);
+  }, [fetchDiscovery, fetchMatches]);
 
   const login = async (email: string, password: string) => {
     const { access_token } = await api.login(email, password);
@@ -71,6 +89,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const userData = await api.getMe();
     setUser(userData);
     setIsOnboarded(userData.is_onboarded);
+    if (userData.is_onboarded) {
+      fetchDiscovery();
+      fetchMatches();
+    }
   };
 
   const signup = async (email: string, password: string) => {
@@ -83,25 +105,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const userData = await api.getMe();
     setUser(userData);
     setIsOnboarded(true);
+    fetchDiscovery();
   };
 
-  const handleSwipe = (direction: 'left' | 'right' | 'up') => {
+  const updateProfile = async (profileData: Partial<Profile>) => {
+    const updatedProfile = await api.updateProfile(profileData);
+    setUser(prev => prev ? { ...prev, profile: updatedProfile } : null);
+  };
+
+  const handleSwipe = async (direction: 'left' | 'right' | 'up') => {
     if (currentIndex >= profiles.length) return;
 
     const profile = profiles[currentIndex];
     setHistory(prev => [...prev, currentIndex]);
     setCurrentIndex(prev => prev + 1);
 
-    if (direction === 'right' || direction === 'up') {
-      // Simulate a match
-      const newMatch: Match = {
-        id: `m-${profile.id}`,
-        profile: profile,
-        lastMessage: 'You matched!',
-        timestamp: 'Just now',
-        unread: true,
-      };
-      setMatches(prev => [newMatch, ...prev]);
+    const isLike = direction === 'right' || direction === 'up';
+    try {
+      const result = await api.swipe(profile.id, isLike);
+      if (result.is_match) {
+        // Refresh matches if a match occurred
+        fetchMatches();
+      }
+    } catch (error) {
+      console.error('Swipe failed', error);
     }
   };
 
@@ -112,29 +139,32 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setCurrentIndex(lastIndex);
   };
 
-  const setActiveMatch = (id: string | null) => {
+  const setActiveMatch = async (id: string | null) => {
     setActiveMatchId(id);
     if (id) {
       setActiveTab('chat');
-      // Mark as read
-      setMatches(prev => prev.map(m => m.id === id ? { ...m, unread: false } : m));
+      // Fetch messages
+      try {
+        const msgs = await api.getMessages(id);
+        setMessages(prev => ({ ...prev, [id]: msgs }));
+      } catch (e) {
+        console.error('Failed to load messages', e);
+      }
     }
   };
 
-  const sendMessage = (matchId: string, text: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      senderId: 'me',
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages(prev => ({
-      ...prev,
-      [matchId]: [...(prev[matchId] || []), newMessage]
-    }));
-
-    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, lastMessage: text, timestamp: 'Just now' } : m));
+  const sendMessage = async (matchId: string, text: string) => {
+    try {
+      const newMsg = await api.sendMessage(matchId, text);
+      setMessages(prev => ({
+        ...prev,
+        [matchId]: [...(prev[matchId] || []), newMsg]
+      }));
+      // Update match list preview
+      fetchMatches();
+    } catch (e) {
+      console.error('Send message failed', e);
+    }
   };
 
   const logout = () => {
@@ -144,6 +174,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setActiveTab('discovery');
     setCurrentIndex(0);
     setHistory([]);
+    setProfiles([]);
+    setMatches([]);
   };
 
   return (
@@ -154,7 +186,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       profiles, currentIndex, handleSwipe, undo,
       matches, activeMatchId, setActiveMatch,
       messages, sendMessage,
-      login, signup, logout, completeOnboarding
+      login, signup, logout, completeOnboarding, updateProfile,
+      refreshMatches: fetchMatches
     }}>
       {children}
     </AppContext.Provider>
