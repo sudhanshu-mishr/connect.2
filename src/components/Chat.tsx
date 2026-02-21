@@ -10,7 +10,8 @@ export default function Chat() {
   const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const match = matches.find(m => m.id === activeMatchId);
+  // Robust comparison for ID (string vs number)
+  const match = matches.find(m => String(m.id) === String(activeMatchId));
   const matchMessages = activeMatchId ? (messages[activeMatchId] || []) : [];
 
   const scrollToBottom = () => {
@@ -54,7 +55,21 @@ export default function Chat() {
     }
   };
 
-  if (!match) return null;
+  if (!activeMatchId) return null;
+
+  if (!match) {
+    return (
+      <div className="h-full flex flex-col bg-black items-center justify-center text-white">
+        <p className="text-white/60 mb-4">Match not found or loading...</p>
+        <button
+          onClick={() => setActiveMatch(null)}
+          className="text-tinder-orange flex items-center gap-2 hover:underline"
+        >
+          <ArrowLeft size={16} /> Go Back
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-black relative">

@@ -124,7 +124,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const result = await api.swipe(profile.id, isLike);
       if (result.is_match) {
-        // Refresh matches if a match occurred
         fetchMatches();
       }
     } catch (error) {
@@ -143,6 +142,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setActiveMatchId(id);
     if (id) {
       setActiveTab('chat');
+      // Ensure we have the match in our list or fetch it?
+      // For now, assume it's in the list.
       // Fetch messages
       try {
         const msgs = await api.getMessages(id);
@@ -160,7 +161,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         ...prev,
         [matchId]: [...(prev[matchId] || []), newMsg]
       }));
-      // Update match list preview
       fetchMatches();
     } catch (e) {
       console.error('Send message failed', e);
