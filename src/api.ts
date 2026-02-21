@@ -1,9 +1,8 @@
 import { Profile, AuthResponse, User } from './types';
 
-// In development, Vite proxies /api to backend.
-// In production, we assume relative path /api works if served from same origin,
-// or use VITE_API_URL if defined.
-const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// In this single-service model, the backend serves the frontend.
+// API calls should just go to /api/..., which is on the same origin.
+const BASE_URL = '/api';
 
 const getHeaders = (): HeadersInit => {
   const token = localStorage.getItem('token');
@@ -15,7 +14,6 @@ const getHeaders = (): HeadersInit => {
 
 export const api = {
   signup: async (email: string, password: string): Promise<User> => {
-    console.log(`Signing up with ${BASE_URL}/auth/signup`);
     const response = await fetch(`${BASE_URL}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -35,7 +33,6 @@ export const api = {
   },
 
   login: async (email: string, password: string): Promise<AuthResponse> => {
-    console.log(`Logging in with ${BASE_URL}/auth/login`);
     const response = await fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
