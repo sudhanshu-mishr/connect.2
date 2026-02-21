@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Settings, Pencil, Shield, CreditCard, LogOut, ChevronRight, Heart, Save, X, Upload } from 'lucide-react';
+import { Settings, Pencil, Shield, CreditCard, LogOut, ChevronRight, Heart, Save, X, Upload, Trash2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { cn } from '../lib/utils';
 import { api } from '../api';
@@ -37,13 +37,21 @@ export default function ProfileView() {
       setIsUploading(true);
       try {
         const url = await api.uploadImage(e.target.files[0]);
-        setFormData(prev => ({ ...prev, images: [url, ...prev.images] }));
+        // Append new image to the list
+        setFormData(prev => ({ ...prev, images: [...prev.images, url] }));
       } catch (error) {
         console.error('Upload failed', error);
       } finally {
         setIsUploading(false);
       }
     }
+  };
+
+  const removeImage = (indexToRemove: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, index) => index !== indexToRemove)
+    }));
   };
 
   if (!user || !user.profile) return null;
@@ -69,100 +77,131 @@ export default function ProfileView() {
         )}
       </div>
 
-      {/* Profile Card */}
+      {/* Profile Content */}
       <div className="px-6 mb-12">
         <div className="relative flex flex-col items-center">
-          <div className="relative">
-            <div className="w-32 h-32 rounded-full p-1 tinder-gradient relative">
-              <img
-                src={formData.images[0] || user.profile.images[0] || "https://picsum.photos/400/400"}
-                alt="My Profile"
-                className="w-full h-full rounded-full object-cover border-4 border-black"
-                referrerPolicy="no-referrer"
-              />
-              {isEditing && (
-                <div
-                  className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center cursor-pointer"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {isUploading ? (
-                    <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Upload size={24} className="text-white" />
-                  )}
-                </div>
-              )}
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleImageUpload}
-              />
-            </div>
-            {!isEditing && (
+
+          {/* Main Avatar (First Image) */}
+          {!isEditing && (
+            <div className="relative mb-4">
+              <div className="w-32 h-32 rounded-full p-1 tinder-gradient">
+                <img
+                  src={formData.images[0] || user.profile.images[0] || "https://picsum.photos/400/400"}
+                  alt="My Profile"
+                  className="w-full h-full rounded-full object-cover border-4 border-black"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
               <button
                 onClick={() => setIsEditing(true)}
                 className="absolute bottom-0 right-0 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg border-4 border-black text-black"
               >
                 <Pencil size={18} />
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {isEditing ? (
-            <div className="w-full mt-4 space-y-4">
-              <input
-                type="text"
-                placeholder="Name"
-                value={formData.name}
-                onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              />
-              <input
-                type="number"
-                placeholder="Age"
-                value={formData.age}
-                onChange={e => setFormData({...formData, age: parseInt(e.target.value)})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              />
-              <select
-                value={formData.gender}
-                onChange={e => setFormData({...formData, gender: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              >
-                <option value="">Select Gender</option>
-                <option value="Man">Man</option>
-                <option value="Woman">Woman</option>
-                <option value="Non-binary">Non-binary</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Job Title"
-                value={formData.job_title}
-                onChange={e => setFormData({...formData, job_title: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              />
-              <input
-                type="text"
-                placeholder="Company"
-                value={formData.company}
-                onChange={e => setFormData({...formData, company: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              />
-              <input
-                type="text"
-                placeholder="School"
-                value={formData.school}
-                onChange={e => setFormData({...formData, school: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
-              />
-              <textarea
-                placeholder="Bio"
-                value={formData.bio}
-                onChange={e => setFormData({...formData, bio: e.target.value})}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white h-24"
-              />
+            <div className="w-full space-y-6">
+              {/* Photo Grid */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-white/60 uppercase tracking-wider">Photos</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {formData.images.map((img, i) => (
+                    <div key={i} className="aspect-[3/4] relative rounded-xl overflow-hidden bg-zinc-900 border border-white/10 group">
+                      <img src={img} alt="Uploaded" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => removeImage(i)}
+                        className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white/80 hover:bg-red-500 hover:text-white transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                      {i === 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-center py-1 font-bold uppercase">Main</div>
+                      )}
+                    </div>
+                  ))}
+
+                  {formData.images.length < 9 && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="aspect-[3/4] rounded-xl bg-white/5 border-2 border-dashed border-white/20 flex flex-col items-center justify-center hover:bg-white/10 transition-colors disabled:opacity-50"
+                    >
+                      {isUploading ? (
+                        <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Upload className="text-white/40 mb-2" size={20} />
+                          <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Add</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                />
+              </div>
+
+              {/* Form Fields */}
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={formData.name}
+                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+                />
+                <input
+                  type="number"
+                  placeholder="Age"
+                  value={formData.age}
+                  onChange={e => setFormData({...formData, age: parseInt(e.target.value)})}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+                />
+                <select
+                  value={formData.gender}
+                  onChange={e => setFormData({...formData, gender: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="Man">Man</option>
+                  <option value="Woman">Woman</option>
+                  <option value="Non-binary">Non-binary</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Job Title"
+                  value={formData.job_title}
+                  onChange={e => setFormData({...formData, job_title: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+                />
+                <input
+                  type="text"
+                  placeholder="Company"
+                  value={formData.company}
+                  onChange={e => setFormData({...formData, company: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+                />
+                <input
+                  type="text"
+                  placeholder="School"
+                  value={formData.school}
+                  onChange={e => setFormData({...formData, school: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+                />
+                <textarea
+                  placeholder="Bio"
+                  value={formData.bio}
+                  onChange={e => setFormData({...formData, bio: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white h-24"
+                />
+              </div>
             </div>
           ) : (
             <>
@@ -184,12 +223,14 @@ export default function ProfileView() {
       </div>
 
       {/* Menu Items */}
-      <div className="px-6 pb-12 flex flex-col gap-2">
-        <MenuItem icon={Heart} label="My Likes" />
-        <MenuItem icon={Shield} label="Safety Center" />
-        <MenuItem icon={CreditCard} label="Payment Settings" />
-        <MenuItem icon={LogOut} label="Logout" color="text-red-500" onClick={logout} />
-      </div>
+      {!isEditing && (
+        <div className="px-6 pb-12 flex flex-col gap-2">
+          <MenuItem icon={Heart} label="My Likes" />
+          <MenuItem icon={Shield} label="Safety Center" />
+          <MenuItem icon={CreditCard} label="Payment Settings" />
+          <MenuItem icon={LogOut} label="Logout" color="text-red-500" onClick={logout} />
+        </div>
+      )}
     </div>
   );
 }
