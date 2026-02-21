@@ -2,6 +2,10 @@ services:
   - type: web
     name: conect-app
     runtime: python
+    # We use a custom start script to ensure build happens in the same context or as a prep step.
+    # But Render separates build and start commands typically.
+    # The buildCommand runs during build phase. Artifacts must be preserved.
+    # 'dist' created in build phase should be available in run phase.
     buildCommand: npm install && npm run build && pip install -r backend/requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     envVars:
