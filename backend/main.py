@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import timedelta
 from typing import List
 
@@ -9,6 +10,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from . import crud, models, schemas, auth, database
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -76,13 +81,21 @@ def onboard_user(
 # --- Static Files / Frontend ---
 # Serve React App from 'dist' folder if it exists.
 
-if os.path.exists("dist"):
-    app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
+# Check current working directory and list contents for debugging on Render logs
+cwd = os.getcwd()
+logger.info(f"Current working directory: {cwd}")
+if os.path.exists(cwd):
+    logger.info(f"Directory contents: {os.listdir(cwd)}")
+
+dist_path = os.path.join(cwd, "dist")
+if os.path.exists(dist_path):
+    logger.info(f"Found dist folder at {dist_path}")
+    app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
 
     # Serve Root
     @app.get("/")
     async def serve_root():
-        return FileResponse("dist/index.html")
+        return FileResponse(os.path.join(dist_path, "index.html"))
 
     # Catch-all route for SPA
     @app.get("/{full_path:path}")
@@ -90,12 +103,13 @@ if os.path.exists("dist"):
         if full_path.startswith("api"):
             raise HTTPException(status_code=404, detail="API Endpoint Not Found")
 
-        file_path = os.path.join("dist", full_path)
+        file_path = os.path.join(dist_path, full_path)
         if os.path.exists(file_path) and os.path.isfile(file_path):
             return FileResponse(file_path)
 
-        return FileResponse("dist/index.html")
+        return FileResponse(os.path.join(dist_path, "index.html"))
 else:
+    logger.warning(f"Dist folder not found at {dist_path}. Serving fallback message.")
     @app.get("/")
     def read_root():
-        return {"message": "Welcome to Conect API (Development Mode - Frontend not built)"}
+        return {"message": "Welcome to Conect API (Development Mode - Frontend not built). Please run 'npm run build' locally or ensure build command succeeds on deployment."}
