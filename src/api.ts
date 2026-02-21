@@ -1,6 +1,9 @@
 import { Profile, AuthResponse, User } from './types';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// In development, Vite proxies /api to backend.
+// In production, we assume relative path /api works if served from same origin,
+// or use VITE_API_URL if defined.
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const getHeaders = (): HeadersInit => {
   const token = localStorage.getItem('token');
@@ -12,36 +15,51 @@ const getHeaders = (): HeadersInit => {
 
 export const api = {
   signup: async (email: string, password: string): Promise<User> => {
-    const response = await fetch(`${API_URL}/auth/signup`, {
+    console.log(`Signing up with ${BASE_URL}/auth/signup`);
+    const response = await fetch(`${BASE_URL}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Signup failed');
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        throw new Error(`Signup failed: ${response.status} ${response.statusText}`);
+      }
+      throw new Error(errorData.detail || 'Signup failed');
     }
     return response.json();
   },
 
   login: async (email: string, password: string): Promise<AuthResponse> => {
-    const response = await fetch(`${API_URL}/auth/login`, {
+    console.log(`Logging in with ${BASE_URL}/auth/login`);
+    const response = await fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Login failed');
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        throw new Error(`Login failed: ${response.status} ${response.statusText}`);
+      }
+      throw new Error(errorData.detail || 'Login failed');
     }
     return response.json();
   },
 
   getMe: async (): Promise<User> => {
-    const response = await fetch(`${API_URL}/users/me`, {
+    const response = await fetch(`${BASE_URL}/users/me`, {
       method: 'GET',
       headers: getHeaders(),
     });
+
     if (!response.ok) {
       if (response.status === 401) {
         throw new Error('Unauthorized');
@@ -52,11 +70,12 @@ export const api = {
   },
 
   onboard: async (profileData: Partial<Profile>): Promise<Profile> => {
-    const response = await fetch(`${API_URL}/users/me/onboard`, {
+    const response = await fetch(`${BASE_URL}/users/me/onboard`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(profileData),
     });
+
     if (!response.ok) throw new Error('Onboarding failed');
     return response.json();
   }
