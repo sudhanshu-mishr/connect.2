@@ -3,9 +3,16 @@ export interface Profile {
   name: string;
   age: number;
   bio: string;
-  distance?: string;
-  job?: string;
+  // New Fields
+  gender?: string;
+  orientation?: string;
+  relationship_goals?: string;
+  lifestyle_badges?: string[];
+  job_title?: string;
+  company?: string;
   school?: string;
+
+  distance?: string; // Derived on frontend or passed from backend
   images: string[];
   interests: string[];
 }
@@ -15,6 +22,8 @@ export interface User {
   email: string;
   is_active: boolean;
   is_onboarded: boolean;
+  is_verified: boolean;
+  is_admin: boolean;
   profile?: Profile;
 }
 
@@ -24,18 +33,24 @@ export interface AuthResponse {
 }
 
 export interface Match {
-  id: string;
-  profile: Profile;
-  lastMessage?: string;
+  id: string | number;
+  user: User; // The other user
+  lastMessage?: Message;
   timestamp: string;
-  unread: boolean;
+  unread_count: number;
+
+  // Legacy support for older components
+  profile?: Profile;
+  lastMessageText?: string;
+  unread?: boolean;
 }
 
 export interface Message {
-  id: string;
-  senderId: string;
+  id: number;
+  senderId: number;
   text: string;
   timestamp: string;
+  isRead: boolean;
 }
 
 export type AppTab = 'discovery' | 'matches' | 'chat' | 'profile';

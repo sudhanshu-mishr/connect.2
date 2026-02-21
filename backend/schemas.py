@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from datetime import datetime
 
 class Token(BaseModel):
@@ -13,6 +13,15 @@ class ProfileBase(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
     bio: Optional[str] = None
+    gender: Optional[str] = None
+    orientation: Optional[str] = None
+    relationship_goals: Optional[str] = None
+    lifestyle_badges: List[str] = []
+    job_title: Optional[str] = None
+    company: Optional[str] = None
+    school: Optional[str] = None
+    location_lat: Optional[float] = None
+    location_lon: Optional[float] = None
     images: List[str] = []
     interests: List[str] = []
 
@@ -42,6 +51,8 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     is_onboarded: bool
+    is_verified: bool
+    is_admin: bool
     profile: Optional[ProfileResponse] = None
 
     class Config:
@@ -73,10 +84,17 @@ class MessageResponse(MessageBase):
 
 class MatchResponse(BaseModel):
     id: int
-    user: UserResponse  # The other user in the match
+    user: UserResponse
     last_message: Optional[MessageResponse] = None
     unread_count: int = 0
     timestamp: datetime
 
     class Config:
         from_attributes = True
+
+class ReportCreate(BaseModel):
+    reported_id: int
+    reason: str
+
+class BlockCreate(BaseModel):
+    blocked_id: int
