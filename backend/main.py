@@ -1,9 +1,11 @@
 import os
+import shutil
 import logging
+import uuid
 from datetime import timedelta, datetime
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -34,6 +36,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Ensure uploads directory exists
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Mount uploads directory
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # --- API Routes ---
 
@@ -87,6 +96,19 @@ def update_profile(
 ):
     return crud.update_user_profile(db, profile, current_user.id)
 
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    # Generate unique filename
+    file_extension = os.path.splitext(file.filename)[1]
+    filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Return URL (relative to root)
+    return {"url": f"/uploads/{filename}"}
+
 @app.get("/api/users/discovery", response_model=List[schemas.ProfileResponse])
 def get_discovery_profiles(
     limit: int = 10,
@@ -109,7 +131,6 @@ def get_matches(
     db: Session = Depends(database.get_db)
 ):
     matches = crud.get_matches_for_user(db, current_user.id)
-    # The CRUD returns a list of dicts that matches the MatchResponse schema
     return matches
 
 @app.get("/api/matches/{match_id}/messages", response_model=List[schemas.MessageResponse])
@@ -119,7 +140,6 @@ def get_messages(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(database.get_db)
 ):
-    # Security check: verify user is in match (handled in CRUD properly or here)
     match = db.query(models.Match).filter(models.Match.id == match_id).first()
     if not match or (match.user1_id != current_user.id and match.user2_id != current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -150,8 +170,8 @@ if os.path.exists(dist_path):
 
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
-        if full_path.startswith("api"):
-            raise HTTPException(status_code=404, detail="API Endpoint Not Found")
+        if full_path.startswith("api") or full_path.startswith("uploads"):
+            raise HTTPException(status_code=404, detail="Not Found")
 
         file_path = os.path.join(dist_path, full_path)
         if os.path.exists(file_path) and os.path.isfile(file_path):
