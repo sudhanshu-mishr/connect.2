@@ -15,6 +15,7 @@ from . import crud, models, schemas, auth, database
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Create tables if not exist (e.g., local SQLite file creation)
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
