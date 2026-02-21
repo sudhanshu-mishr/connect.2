@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_, and_, func
 from typing import List, Optional
 from datetime import datetime
 
@@ -88,13 +88,14 @@ def get_potential_matches(db: Session, user_id: int, limit: int = 10, gender_fil
 
 # Swipe CRUD
 def create_swipe(db: Session, swipe: schemas.SwipeCreate, user_id: int):
+    # Check if already swiped
     existing = db.query(models.Swipe).filter(
         models.Swipe.user_id == user_id,
         models.Swipe.target_id == swipe.target_id
     ).first()
 
     if existing:
-        return {"is_match": False}
+        return {"is_match": False} # Already swiped, ignore
 
     db_swipe = models.Swipe(user_id=user_id, target_id=swipe.target_id, is_like=swipe.is_like)
     db.add(db_swipe)
@@ -102,6 +103,7 @@ def create_swipe(db: Session, swipe: schemas.SwipeCreate, user_id: int):
 
     is_match = False
     if swipe.is_like:
+        # Check if target also liked user
         other_swipe = db.query(models.Swipe).filter(
             models.Swipe.user_id == swipe.target_id,
             models.Swipe.target_id == user_id,
@@ -109,7 +111,7 @@ def create_swipe(db: Session, swipe: schemas.SwipeCreate, user_id: int):
         ).first()
 
         if other_swipe:
-            # Check match existence
+            # Create Match
             match_exists = db.query(models.Match).filter(
                 or_(
                     and_(models.Match.user1_id == user_id, models.Match.user2_id == swipe.target_id),
@@ -127,7 +129,11 @@ def create_swipe(db: Session, swipe: schemas.SwipeCreate, user_id: int):
 
 # Match CRUD
 def get_matches_for_user(db: Session, user_id: int):
-    matches = db.query(models.Match).filter(
+    # Eager load users to avoid N+1 queries later if possible, though we need logic to pick the "other" one.
+    matches = db.query(models.Match).options(
+        joinedload(models.Match.user1).joinedload(models.User.profile),
+        joinedload(models.Match.user2).joinedload(models.User.profile)
+    ).filter(
         or_(models.Match.user1_id == user_id, models.Match.user2_id == user_id)
     ).order_by(models.Match.timestamp.desc()).all()
 
@@ -135,33 +141,39 @@ def get_matches_for_user(db: Session, user_id: int):
     for match in matches:
         other_user_id = match.user2_id if match.user1_id == user_id else match.user1_id
 
-        # Verify not blocked
+        # Determine the other user object
+        if match.user1_id == other_user_id:
+            other_user = match.user1
+        else:
+            other_user = match.user2
+
+        if not other_user:
+            continue
+
+        # Check block (can optimize by filtering in main query but complex with OR)
         block_exists = db.query(models.Block).filter(
             or_(
                 and_(models.Block.blocker_id == user_id, models.Block.blocked_id == other_user_id),
                 and_(models.Block.blocker_id == other_user_id, models.Block.blocked_id == user_id)
             )
         ).first()
-
         if block_exists:
             continue
 
-        other_user = get_user(db, other_user_id)
-        if other_user:
-            last_message = db.query(models.Message).filter(models.Message.match_id == match.id).order_by(models.Message.timestamp.desc()).first()
-            unread_count = db.query(models.Message).filter(
-                models.Message.match_id == match.id,
-                models.Message.sender_id != user_id,
-                models.Message.is_read == False
-            ).count()
+        last_message = db.query(models.Message).filter(models.Message.match_id == match.id).order_by(models.Message.timestamp.desc()).first()
+        unread_count = db.query(models.Message).filter(
+            models.Message.match_id == match.id,
+            models.Message.sender_id != user_id,
+            models.Message.is_read == False
+        ).count()
 
-            result.append({
-                "id": match.id,
-                "user": other_user,
-                "last_message": last_message,
-                "unread_count": unread_count,
-                "timestamp": match.timestamp or datetime.utcnow()
-            })
+        result.append({
+            "id": match.id,
+            "user": other_user,
+            "last_message": last_message,
+            "unread_count": unread_count,
+            "timestamp": match.timestamp or datetime.utcnow()
+        })
 
     return result
 
@@ -172,7 +184,6 @@ def create_message(db: Session, message: schemas.MessageCreate, user_id: int, ma
     match = db.query(models.Match).filter(models.Match.id == match_id).first()
     if not match:
         return None
-    # Block check handled at higher level or query filtering
     if match.user1_id != user_id and match.user2_id != user_id:
         return None
 
@@ -202,7 +213,6 @@ def create_block(db: Session, block: schemas.BlockCreate, blocker_id: int):
     db_block = models.Block(blocker_id=blocker_id, blocked_id=block.blocked_id)
     db.add(db_block)
 
-    # Also unmatch if exists
     match = db.query(models.Match).filter(
         or_(
             and_(models.Match.user1_id == blocker_id, models.Match.user2_id == block.blocked_id),
@@ -211,7 +221,7 @@ def create_block(db: Session, block: schemas.BlockCreate, blocker_id: int):
     ).first()
 
     if match:
-        db.delete(match) # Or just leave it and filter out, but deleting keeps DB clean
+        db.delete(match)
 
     db.commit()
     return db_block
