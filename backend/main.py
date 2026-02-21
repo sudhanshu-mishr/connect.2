@@ -13,11 +13,9 @@ from sqlalchemy.orm import Session
 
 from . import crud, models, schemas, auth, database
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create tables if not exist
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
@@ -37,11 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure uploads directory exists
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# Mount uploads directory
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # --- API Routes ---
@@ -98,24 +93,22 @@ def update_profile(
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    # Generate unique filename
     file_extension = os.path.splitext(file.filename)[1]
     filename = f"{uuid.uuid4()}{file_extension}"
     file_path = os.path.join(UPLOAD_DIR, filename)
-
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-
-    # Return URL (relative to root)
     return {"url": f"/uploads/{filename}"}
 
 @app.get("/api/users/discovery", response_model=List[schemas.ProfileResponse])
 def get_discovery_profiles(
     limit: int = 10,
+    gender: Optional[str] = None,
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(database.get_db)
 ):
-    return crud.get_potential_matches(db, current_user.id, limit)
+    # Pass optional gender filter from query param
+    return crud.get_potential_matches(db, current_user.id, limit, gender_filter=gender)
 
 @app.post("/api/swipes", response_model=schemas.SwipeResponse)
 def create_swipe(
@@ -130,8 +123,7 @@ def get_matches(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(database.get_db)
 ):
-    matches = crud.get_matches_for_user(db, current_user.id)
-    return matches
+    return crud.get_matches_for_user(db, current_user.id)
 
 @app.get("/api/matches/{match_id}/messages", response_model=List[schemas.MessageResponse])
 def get_messages(
@@ -143,7 +135,6 @@ def get_messages(
     match = db.query(models.Match).filter(models.Match.id == match_id).first()
     if not match or (match.user1_id != current_user.id and match.user2_id != current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized")
-
     return crud.get_messages(db, match_id, limit)
 
 @app.post("/api/matches/{match_id}/messages", response_model=schemas.MessageResponse)
@@ -157,6 +148,35 @@ def create_message(
     if not db_message:
         raise HTTPException(status_code=400, detail="Failed to send message")
     return db_message
+
+# --- Safety Routes ---
+
+@app.post("/api/users/report")
+def report_user(
+    report: schemas.ReportCreate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    return crud.create_report(db, report, current_user.id)
+
+@app.post("/api/users/block")
+def block_user(
+    block: schemas.BlockCreate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    return crud.create_block(db, block, current_user.id)
+
+@app.post("/api/matches/{match_id}/unmatch")
+def unmatch(
+    match_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    success = crud.unmatch_user(db, match_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to unmatch")
+    return {"status": "success"}
 
 # --- Static Files / Frontend ---
 cwd = os.getcwd()

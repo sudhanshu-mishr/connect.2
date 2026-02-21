@@ -10,7 +10,6 @@ const getHeaders = (): HeadersInit => {
   };
 };
 
-// Headers for file upload (multipart/form-data) - browser sets Content-Type automatically
 const getAuthHeader = (): HeadersInit => {
   const token = localStorage.getItem('token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -97,7 +96,7 @@ export const api = {
 
     const response = await fetch(`${BASE_URL}/upload`, {
       method: 'POST',
-      headers: getAuthHeader(), // No Content-Type, browser sets multipart boundary
+      headers: getAuthHeader(),
       body: formData,
     });
 
@@ -106,8 +105,9 @@ export const api = {
     return data.url;
   },
 
-  getDiscovery: async (): Promise<Profile[]> => {
-    const response = await fetch(`${BASE_URL}/users/discovery`, {
+  getDiscovery: async (filters: { gender?: string } = {}): Promise<Profile[]> => {
+    const query = new URLSearchParams(filters as any).toString();
+    const response = await fetch(`${BASE_URL}/users/discovery?${query}`, {
       headers: getHeaders(),
     });
     if (!response.ok) throw new Error('Failed to fetch discovery');
@@ -147,6 +147,35 @@ export const api = {
       body: JSON.stringify({ text }),
     });
     if (!response.ok) throw new Error('Failed to send message');
+    return response.json();
+  },
+
+  reportUser: async (reportedId: number | string, reason: string) => {
+    const response = await fetch(`${BASE_URL}/users/report`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reported_id: reportedId, reason }),
+    });
+    if (!response.ok) throw new Error('Report failed');
+    return response.json();
+  },
+
+  blockUser: async (blockedId: number | string) => {
+    const response = await fetch(`${BASE_URL}/users/block`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ blocked_id: blockedId }),
+    });
+    if (!response.ok) throw new Error('Block failed');
+    return response.json();
+  },
+
+  unmatchUser: async (matchId: number | string) => {
+    const response = await fetch(`${BASE_URL}/matches/${matchId}/unmatch`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Unmatch failed');
     return response.json();
   }
 };

@@ -14,8 +14,12 @@ export default function ProfileView() {
     name: user?.profile?.name || '',
     age: user?.profile?.age || 18,
     bio: user?.profile?.bio || '',
-    job: user?.profile?.job || '',
+    job_title: user?.profile?.job_title || '',
+    company: user?.profile?.company || '',
     school: user?.profile?.school || '',
+    gender: user?.profile?.gender || '',
+    relationship_goals: user?.profile?.relationship_goals || '',
+    lifestyle_badges: user?.profile?.lifestyle_badges || [],
     images: user?.profile?.images || [],
   });
 
@@ -122,6 +126,37 @@ export default function ProfileView() {
                 onChange={e => setFormData({...formData, age: parseInt(e.target.value)})}
                 className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
               />
+              <select
+                value={formData.gender}
+                onChange={e => setFormData({...formData, gender: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+              >
+                <option value="">Select Gender</option>
+                <option value="Man">Man</option>
+                <option value="Woman">Woman</option>
+                <option value="Non-binary">Non-binary</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Job Title"
+                value={formData.job_title}
+                onChange={e => setFormData({...formData, job_title: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+              />
+              <input
+                type="text"
+                placeholder="Company"
+                value={formData.company}
+                onChange={e => setFormData({...formData, company: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+              />
+              <input
+                type="text"
+                placeholder="School"
+                value={formData.school}
+                onChange={e => setFormData({...formData, school: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white"
+              />
               <textarea
                 placeholder="Bio"
                 value={formData.bio}
@@ -132,7 +167,17 @@ export default function ProfileView() {
           ) : (
             <>
               <h2 className="text-2xl font-bold mt-4">{user.profile.name}, {user.profile.age}</h2>
-              <p className="text-white/40 text-sm mt-1">{user.profile.bio}</p>
+              <p className="text-white/40 text-sm mt-1">{user.profile.job_title} @ {user.profile.company}</p>
+              <p className="text-white/40 text-sm mt-1">{user.profile.school}</p>
+              <p className="text-white/60 text-sm mt-4 text-center px-4">{user.profile.bio}</p>
+
+              <div className="flex flex-wrap justify-center gap-2 mt-4">
+                {user.profile.lifestyle_badges && user.profile.lifestyle_badges.map((badge, i) => (
+                  <span key={i} className="px-3 py-1 rounded-full bg-white/10 text-xs text-white/80 border border-white/5">
+                    {badge}
+                  </span>
+                ))}
+              </div>
             </>
           )}
         </div>

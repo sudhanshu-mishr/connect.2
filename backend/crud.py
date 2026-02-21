@@ -57,12 +57,28 @@ def set_user_onboarded(db: Session, user_id: int):
     return db_user
 
 # Discovery CRUD
-def get_potential_matches(db: Session, user_id: int, limit: int = 10):
+def get_potential_matches(db: Session, user_id: int, limit: int = 10, gender_filter: Optional[str] = None):
+    # 1. Users already swiped
     swiped_rows = db.query(models.Swipe.target_id).filter(models.Swipe.user_id == user_id).all()
     swiped_ids = [row[0] for row in swiped_rows]
-    exclude_ids = swiped_ids + [user_id]
 
-    potential_users = db.query(models.User).filter(models.User.id.notin_(exclude_ids)).limit(limit).all()
+    # 2. Users blocked by current user
+    blocked_rows = db.query(models.Block.blocked_id).filter(models.Block.blocker_id == user_id).all()
+    blocked_ids = [row[0] for row in blocked_rows]
+
+    # 3. Users who blocked current user (reciprocal safety)
+    blocked_by_rows = db.query(models.Block.blocker_id).filter(models.Block.blocked_id == user_id).all()
+    blocker_ids = [row[0] for row in blocked_by_rows]
+
+    exclude_ids = list(set(swiped_ids + blocked_ids + blocker_ids + [user_id]))
+
+    query = db.query(models.User).join(models.Profile).filter(models.User.id.notin_(exclude_ids))
+
+    # Apply filters
+    if gender_filter:
+        query = query.filter(models.Profile.gender == gender_filter)
+
+    potential_users = query.limit(limit).all()
 
     profiles = []
     for user in potential_users:
@@ -93,6 +109,7 @@ def create_swipe(db: Session, swipe: schemas.SwipeCreate, user_id: int):
         ).first()
 
         if other_swipe:
+            # Check match existence
             match_exists = db.query(models.Match).filter(
                 or_(
                     and_(models.Match.user1_id == user_id, models.Match.user2_id == swipe.target_id),
@@ -117,6 +134,18 @@ def get_matches_for_user(db: Session, user_id: int):
     result = []
     for match in matches:
         other_user_id = match.user2_id if match.user1_id == user_id else match.user1_id
+
+        # Verify not blocked
+        block_exists = db.query(models.Block).filter(
+            or_(
+                and_(models.Block.blocker_id == user_id, models.Block.blocked_id == other_user_id),
+                and_(models.Block.blocker_id == other_user_id, models.Block.blocked_id == user_id)
+            )
+        ).first()
+
+        if block_exists:
+            continue
+
         other_user = get_user(db, other_user_id)
         if other_user:
             last_message = db.query(models.Message).filter(models.Message.match_id == match.id).order_by(models.Message.timestamp.desc()).first()
@@ -143,6 +172,7 @@ def create_message(db: Session, message: schemas.MessageCreate, user_id: int, ma
     match = db.query(models.Match).filter(models.Match.id == match_id).first()
     if not match:
         return None
+    # Block check handled at higher level or query filtering
     if match.user1_id != user_id and match.user2_id != user_id:
         return None
 
@@ -160,3 +190,36 @@ def create_message(db: Session, message: schemas.MessageCreate, user_id: int, ma
     db.refresh(db_message)
 
     return db_message
+
+# Safety CRUD
+def create_report(db: Session, report: schemas.ReportCreate, reporter_id: int):
+    db_report = models.Report(reporter_id=reporter_id, reported_id=report.reported_id, reason=report.reason)
+    db.add(db_report)
+    db.commit()
+    return db_report
+
+def create_block(db: Session, block: schemas.BlockCreate, blocker_id: int):
+    db_block = models.Block(blocker_id=blocker_id, blocked_id=block.blocked_id)
+    db.add(db_block)
+
+    # Also unmatch if exists
+    match = db.query(models.Match).filter(
+        or_(
+            and_(models.Match.user1_id == blocker_id, models.Match.user2_id == block.blocked_id),
+            and_(models.Match.user1_id == block.blocked_id, models.Match.user2_id == blocker_id)
+        )
+    ).first()
+
+    if match:
+        db.delete(match) # Or just leave it and filter out, but deleting keeps DB clean
+
+    db.commit()
+    return db_block
+
+def unmatch_user(db: Session, match_id: int, user_id: int):
+    match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if match and (match.user1_id == user_id or match.user2_id == user_id):
+        db.delete(match)
+        db.commit()
+        return True
+    return False

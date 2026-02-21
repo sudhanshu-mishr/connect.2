@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from 'motion/react';
-import { X, Heart, MapPin, Briefcase } from 'lucide-react';
+import { X, Heart, MapPin, Briefcase, GraduationCap } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
 export default function Discovery() {
@@ -36,7 +36,6 @@ export default function Discovery() {
     }
     handleSwipe(direction);
     x.set(0);
-    // Reset position instantly after animation "completes" logically for the next card
     controls.set({ x: 0, opacity: 1 });
   };
 
@@ -82,25 +81,34 @@ export default function Discovery() {
               <span className="text-2xl font-medium opacity-90 mb-1">{currentProfile.age}</span>
             </div>
 
-            <div className="flex items-center gap-2 text-white/80 mb-4 text-sm">
-              <MapPin size={16} />
-              <span>{currentProfile.distance || 'Nearby'}</span>
-              {currentProfile.job && (
-                <>
-                  <span className="w-1 h-1 rounded-full bg-white/50 mx-1" />
+            <div className="flex flex-col gap-1 text-white/80 mb-4 text-sm">
+              <div className="flex items-center gap-2">
+                <MapPin size={16} />
+                <span>{currentProfile.distance || 'Nearby'}</span>
+              </div>
+              {currentProfile.job_title && (
+                <div className="flex items-center gap-2">
                   <Briefcase size={16} />
-                  <span>{currentProfile.job}</span>
-                </>
+                  <span>{currentProfile.job_title} {currentProfile.company && `@ ${currentProfile.company}`}</span>
+                </div>
+              )}
+              {currentProfile.school && (
+                <div className="flex items-center gap-2">
+                  <GraduationCap size={16} />
+                  <span>{currentProfile.school}</span>
+                </div>
               )}
             </div>
 
-            {/* Interests Tags */}
+            {/* Badges & Interests */}
             <div className="flex flex-wrap gap-2 mb-4">
-              {currentProfile.interests.slice(0, 3).map((interest, i) => (
-                <span
-                  key={i}
-                  className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold"
-                >
+              {currentProfile.lifestyle_badges && currentProfile.lifestyle_badges.slice(0, 3).map((badge, i) => (
+                <span key={`badge-${i}`} className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold">
+                  {badge}
+                </span>
+              ))}
+              {currentProfile.interests && currentProfile.interests.slice(0, 3).map((interest, i) => (
+                <span key={`int-${i}`} className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold border border-white/10">
                   {interest}
                 </span>
               ))}
