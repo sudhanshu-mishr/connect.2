@@ -1,7 +1,5 @@
-import { Profile, AuthResponse, User } from './types';
+import { Profile, AuthResponse, User, Match, Message } from './types';
 
-// In this single-service model, the backend serves the frontend.
-// API calls should just go to /api/..., which is on the same origin.
 const BASE_URL = '/api';
 
 const getHeaders = (): HeadersInit => {
@@ -74,6 +72,60 @@ export const api = {
     });
 
     if (!response.ok) throw new Error('Onboarding failed');
+    return response.json();
+  },
+
+  updateProfile: async (profileData: Partial<Profile>): Promise<Profile> => {
+    const response = await fetch(`${BASE_URL}/users/me/profile`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(profileData),
+    });
+    if (!response.ok) throw new Error('Update failed');
+    return response.json();
+  },
+
+  getDiscovery: async (): Promise<Profile[]> => {
+    const response = await fetch(`${BASE_URL}/users/discovery`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch discovery');
+    return response.json();
+  },
+
+  swipe: async (targetId: number | string, isLike: boolean): Promise<{ is_match: boolean }> => {
+    const response = await fetch(`${BASE_URL}/swipes`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ target_id: targetId, is_like: isLike }),
+    });
+    if (!response.ok) throw new Error('Swipe failed');
+    return response.json();
+  },
+
+  getMatches: async (): Promise<Match[]> => {
+    const response = await fetch(`${BASE_URL}/matches`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch matches');
+    return response.json();
+  },
+
+  getMessages: async (matchId: number | string): Promise<Message[]> => {
+    const response = await fetch(`${BASE_URL}/matches/${matchId}/messages`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch messages');
+    return response.json();
+  },
+
+  sendMessage: async (matchId: number | string, text: string): Promise<Message> => {
+    const response = await fetch(`${BASE_URL}/matches/${matchId}/messages`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ text }),
+    });
+    if (!response.ok) throw new Error('Failed to send message');
     return response.json();
   }
 };

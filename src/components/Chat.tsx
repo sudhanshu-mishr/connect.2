@@ -1,21 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Video, Phone, Send, Smile, Image as ImageIcon, Mic } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Send, Phone, Video } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { cn } from '../lib/utils';
 
 export default function Chat() {
-  const { activeMatchId, matches, messages, sendMessage, setActiveMatch, setActiveTab } = useAppContext();
+  const { matches, activeMatchId, setActiveMatch, messages, sendMessage, user } = useAppContext();
   const [inputText, setInputText] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const activeMatch = matches.find(m => m.id === activeMatchId);
-  const activeMessages = activeMatchId ? messages[activeMatchId] || [] : [];
+  const match = matches.find(m => m.id === activeMatchId);
+  const matchMessages = activeMatchId ? (messages[activeMatchId] || []) : [];
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [activeMessages]);
+    scrollToBottom();
+  }, [matchMessages]);
 
   const handleSend = () => {
     if (!inputText.trim() || !activeMatchId) return;
@@ -23,121 +25,97 @@ export default function Chat() {
     setInputText('');
   };
 
-  const handleBack = () => {
-    setActiveMatch(null);
-    setActiveTab('matches');
-  };
-
-  if (!activeMatch) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-          <ArrowLeft size={40} className="text-white/20" />
-        </div>
-        <h3 className="text-xl font-bold mb-2">Select a match</h3>
-        <p className="text-white/40 mb-8">Go to your matches to start a conversation.</p>
-        <button 
-          onClick={() => setActiveTab('matches')}
-          className="px-8 py-3 rounded-full tinder-gradient font-bold uppercase tracking-wider"
-        >
-          Go to Matches
-        </button>
-      </div>
-    );
-  }
+  if (!match) return null;
 
   return (
     <div className="h-full flex flex-col bg-black">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 pt-12 border-b border-white/10 bg-black/80 backdrop-blur-md sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={handleBack} className="p-2 -ml-2 hover:bg-white/5 rounded-full transition-colors">
+      <div className="flex items-center justify-between p-4 pt-12 border-b border-white/5 bg-black/50 backdrop-blur-xl absolute top-0 left-0 right-0 z-10">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setActiveMatch(null)}
+            className="p-2 -ml-2 text-white/60 hover:text-white"
+          >
             <ArrowLeft size={24} />
           </button>
+
           <div className="flex items-center gap-3">
-            <img
-              src={activeMatch.profile.images[0]}
-              alt={activeMatch.profile.name}
-              className="w-10 h-10 rounded-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+            <div className="relative">
+              <img
+                src={match.profile.images[0] || "https://picsum.photos/200/200"}
+                alt={match.profile.name}
+                className="w-10 h-10 rounded-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-black" />
+            </div>
             <div>
-              <h3 className="font-bold text-base leading-none mb-1">{activeMatch.profile.name}</h3>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-green-500 rounded-full" />
-                <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Online</span>
-              </div>
+              <h3 className="font-bold text-sm">{match.profile.name}</h3>
+              <span className="text-xs text-white/40">Online</span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="p-2 hover:bg-white/5 rounded-full transition-colors">
-            <Video size={20} className="text-white/60" />
-          </button>
-          <button className="p-2 hover:bg-white/5 rounded-full transition-colors">
-            <Phone size={20} className="text-white/60" />
-          </button>
+
+        <div className="flex items-center gap-4 text-white/60">
+          <Phone size={20} />
+          <Video size={20} />
+          <MoreVertical size={20} />
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        <div className="text-center my-4">
-          <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Today</span>
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 pt-28 pb-4 space-y-4">
+        <div className="text-center text-xs text-white/30 my-6">
+          You matched with {match.profile.name}
         </div>
 
-        {activeMessages.map((msg) => (
-          <div
-            key={msg.id}
-            className={cn(
-              "max-w-[80%] flex flex-col gap-1",
-              msg.senderId === 'me' ? "self-end items-end" : "self-start items-start"
-            )}
-          >
+        {matchMessages.map((msg, i) => {
+          const isMe = msg.senderId === user?.id || msg.senderId === 'me' || Number(msg.senderId) === user?.id;
+          return (
             <div
+              key={msg.id || i}
               className={cn(
-                "px-4 py-2.5 rounded-2xl text-sm leading-relaxed",
-                msg.senderId === 'me'
-                  ? "bg-tinder-orange text-white rounded-tr-none"
-                  : "bg-zinc-800 text-white rounded-tl-none"
+                "flex w-full",
+                isMe ? "justify-end" : "justify-start"
               )}
             >
-              {msg.text}
+              <div className={cn(
+                "max-w-[70%] p-3.5 rounded-2xl text-sm leading-relaxed",
+                isMe
+                  ? "bg-tinder-orange text-white rounded-tr-none"
+                  : "bg-zinc-900 text-white rounded-tl-none border border-white/5"
+              )}>
+                {msg.text}
+              </div>
             </div>
-            <span className="text-[10px] text-white/20 font-medium">{msg.timestamp}</span>
-          </div>
-        ))}
+          );
+        })}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 bg-black border-t border-white/10">
-        <div className="flex items-center gap-3 bg-zinc-900 rounded-full px-4 py-2 border border-white/5">
-          <button className="text-white/40 hover:text-white transition-colors">
-            <ImageIcon size={20} />
-          </button>
+      {/* Input */}
+      <div className="p-4 pb-8 bg-black border-t border-white/5">
+        <div className="flex items-center gap-3 bg-zinc-900 rounded-full p-1.5 pr-2 border border-white/10 focus-within:border-white/20 transition-colors">
           <input
             type="text"
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSend()}
             placeholder="Type a message..."
-            className="flex-1 bg-transparent border-none focus:ring-0 text-sm placeholder:text-white/20"
+            className="flex-1 bg-transparent px-4 py-2.5 text-white placeholder:text-white/30 focus:outline-none"
           />
-          <button className="text-white/40 hover:text-white transition-colors">
-            <Smile size={20} />
+          <button
+            onClick={handleSend}
+            disabled={!inputText.trim()}
+            className={cn(
+              "p-2.5 rounded-full transition-all duration-300",
+              inputText.trim()
+                ? "bg-tinder-orange text-white shadow-lg shadow-tinder-orange/20 rotate-0 scale-100"
+                : "bg-white/5 text-white/20 rotate-90 scale-90"
+            )}
+          >
+            <Send size={18} fill="currentColor" />
           </button>
-          {inputText ? (
-            <button 
-              onClick={handleSend}
-              className="w-8 h-8 rounded-full tinder-gradient flex items-center justify-center text-white"
-            >
-              <Send size={16} />
-            </button>
-          ) : (
-            <button className="text-white/40 hover:text-white transition-colors">
-              <Mic size={20} />
-            </button>
-          )}
         </div>
       </div>
     </div>
