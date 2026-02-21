@@ -1,17 +1,22 @@
-import React, { useState } from 'react';
-import { Settings, Pencil, Shield, CreditCard, LogOut, ChevronRight, Heart, Save, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Settings, Pencil, Shield, CreditCard, LogOut, ChevronRight, Heart, Save, X, Upload } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { cn } from '../lib/utils';
+import { api } from '../api';
 
 export default function ProfileView() {
   const { user, logout, updateProfile } = useAppContext();
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     name: user?.profile?.name || '',
     age: user?.profile?.age || 18,
     bio: user?.profile?.bio || '',
     job: user?.profile?.job || '',
     school: user?.profile?.school || '',
+    images: user?.profile?.images || [],
   });
 
   const handleSave = async () => {
@@ -20,6 +25,20 @@ export default function ProfileView() {
       setIsEditing(false);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploading(true);
+      try {
+        const url = await api.uploadImage(e.target.files[0]);
+        setFormData(prev => ({ ...prev, images: [url, ...prev.images] }));
+      } catch (error) {
+        console.error('Upload failed', error);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -50,12 +69,31 @@ export default function ProfileView() {
       <div className="px-6 mb-12">
         <div className="relative flex flex-col items-center">
           <div className="relative">
-            <div className="w-32 h-32 rounded-full p-1 tinder-gradient">
+            <div className="w-32 h-32 rounded-full p-1 tinder-gradient relative">
               <img
-                src={user.profile.images[0] || "https://picsum.photos/400/400"}
+                src={formData.images[0] || user.profile.images[0] || "https://picsum.photos/400/400"}
                 alt="My Profile"
                 className="w-full h-full rounded-full object-cover border-4 border-black"
                 referrerPolicy="no-referrer"
+              />
+              {isEditing && (
+                <div
+                  className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {isUploading ? (
+                    <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Upload size={24} className="text-white" />
+                  )}
+                </div>
+              )}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleImageUpload}
               />
             </div>
             {!isEditing && (

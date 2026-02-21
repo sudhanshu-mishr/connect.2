@@ -10,6 +10,12 @@ const getHeaders = (): HeadersInit => {
   };
 };
 
+// Headers for file upload (multipart/form-data) - browser sets Content-Type automatically
+const getAuthHeader = (): HeadersInit => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export const api = {
   signup: async (email: string, password: string): Promise<User> => {
     const response = await fetch(`${BASE_URL}/auth/signup`, {
@@ -83,6 +89,21 @@ export const api = {
     });
     if (!response.ok) throw new Error('Update failed');
     return response.json();
+  },
+
+  uploadImage: async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${BASE_URL}/upload`, {
+      method: 'POST',
+      headers: getAuthHeader(), // No Content-Type, browser sets multipart boundary
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Upload failed');
+    const data = await response.json();
+    return data.url;
   },
 
   getDiscovery: async (): Promise<Profile[]> => {

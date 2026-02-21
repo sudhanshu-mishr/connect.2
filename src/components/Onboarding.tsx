@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Flame, Check, Search, Music, Heart, User as UserIcon } from 'lucide-react';
+import { Flame, Check, Search, Music, Heart, User as UserIcon, Upload, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAppContext } from '../context/AppContext';
+import { api } from '../api';
 
 interface OnboardingProps {
   onComplete?: () => void;
@@ -47,13 +48,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const { completeOnboarding } = useAppContext();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: '',
     age: 18,
     bio: '',
     interests: [] as string[],
-    images: [] as string[] // Placeholder for now
+    images: [] as string[]
   });
 
   const nextStep = async () => {
@@ -81,11 +84,25 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     }));
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setUploading(true);
+      try {
+        const url = await api.uploadImage(e.target.files[0]);
+        setFormData(prev => ({ ...prev, images: [...prev.images, url] }));
+      } catch (error) {
+        console.error('Upload failed', error);
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
   const step = STEPS[currentStep];
   const Icon = step.icon;
 
   return (
-    <div className="h-screen bg-black flex flex-col items-center justify-between p-8 text-center relative">
+    <div className="h-screen bg-black flex flex-col items-center justify-between p-8 text-center relative overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md">
         <AnimatePresence mode="wait">
           <motion.div
@@ -122,6 +139,40 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder:text-white/40 focus:outline-none focus:border-tinder-orange transition-colors"
                  />
                </div>
+            )}
+
+            {step.id === 'photos' && (
+              <div className="w-full grid grid-cols-2 gap-4">
+                {formData.images.map((img, i) => (
+                  <div key={i} className="aspect-[3/4] relative rounded-xl overflow-hidden bg-zinc-900 border border-white/10">
+                    <img src={img} alt="Uploaded" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+
+                {formData.images.length < 4 && (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="aspect-[3/4] rounded-xl bg-white/5 border-2 border-dashed border-white/20 flex flex-col items-center justify-center hover:bg-white/10 transition-colors disabled:opacity-50"
+                  >
+                    {uploading ? (
+                      <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="text-white/40 mb-2" />
+                        <span className="text-xs text-white/40 font-bold uppercase tracking-widest">Add Photo</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                />
+              </div>
             )}
 
             {step.id === 'interests' && (
